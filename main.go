@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +15,7 @@ func retrieveFile(fullPath string) string {
 	return filepath.Base(fullPath)
 }
 
-func scanAndClassify(root string) (map[string]string, error) {
+func scanAndClassify(root string, extensionMap map[string]string) (map[string]string, error) {
 	fileMap := make(map[string]string)
 
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
@@ -22,16 +25,8 @@ func scanAndClassify(root string) (map[string]string, error) {
 
 		if !entry.IsDir() {
 			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			category := ""
 
-			switch ext {
-			case ".txt", ".pdf", ".docx":
-				category = "document"
-			case ".jpg", ".jpeg", ".png", ".gif":
-				category = "image"
-			}
-
-			if category != "" {
+			if category, exists := extensionMap[ext]; exists {
 				fileMap[path] = category
 			}
 		}
@@ -49,10 +44,25 @@ func copyFiles(fileMap map[string]string) error {
 		}
 
 		destPath := filepath.Join(destDir, retrieveFile(fullPath))
-		if err := os.Rename(fullPath, destPath); err != nil {
-			return fmt.Errorf("failed to move file %s to %s: %w", fullPath, destPath, err)
+
+		srcFile, err := os.Open(fullPath)
+		if err != nil {
+			return fmt.Errorf("failed to open source file %s: %w", fullPath, err)
 		}
-		fmt.Printf("Moved %s to %s\n", fullPath, destPath)
+		defer srcFile.Close()
+
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			return fmt.Errorf("failed to create destination file %s: %w", destPath, err)
+		}
+		defer destFile.Close()
+
+		_, err = io.Copy(destFile, srcFile)
+		if err != nil {
+			return fmt.Errorf("failed to copy from %s to %s: %w", fullPath, destPath, err)
+		}
+
+		fmt.Printf("Copied %s to %s\n", fullPath, destPath)
 	}
 	return nil
 }
@@ -63,12 +73,44 @@ func printSummary(fileMap map[string]string) {
 		fmt.Printf("%s (%s) => %s\n", fullPath, retrieveFile(fullPath), category)
 	}
 }
+func loadExtensionMap() (map[string]string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	// Get the folder where main.exe is located
+	exeDir := filepath.Dir(exePath)
+
+	// Build full path to config.json next to the exe
+	path := filepath.Join(exeDir, "config.json")
+
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var extMap map[string]string
+	err = json.Unmarshal(data, &extMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return extMap, nil
+}
 
 func main() {
+
+	configmap, err := loadExtensionMap()
+	if err != nil {
+		fmt.Println("Error loading extension map:", err)
+		return
+	}
+	fmt.Println("Loaded extension map:", configmap)
+
 	start := time.Now()
 
 	root := "./"
-	fileMap, err := scanAndClassify(root)
+	fileMap, err := scanAndClassify(root, configmap)
 	if err != nil {
 		fmt.Println("Error scanning files:", err)
 		return

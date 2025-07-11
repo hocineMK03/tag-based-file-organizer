@@ -1,0 +1,9 @@
+{
+  ".txt": "text",
+  ".pdf": "document",
+  ".docx": "document",
+  ".jpg": "image",
+  ".png": "image",
+  
+  ".mp3": "audio"
+}
