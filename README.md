@@ -7,7 +7,7 @@ A command-line tool for organizing files based on tags. This utility allows you 
 - Organize files into folders based on tags.
 - Supports reading and writing file tag metadata.
 - Configurable rules for sorting, moving, or copying files.
-- Cross-platform support (Windows, macOS, Linux).
+
 
 ## Installation
 
